@@ -1,0 +1,10 @@
+﻿# Environment variables
+.env
+
+# Python / Django
+__pycache__/
+*.pyc
+db.sqlite3
+staticfiles/
+media/
+venv/

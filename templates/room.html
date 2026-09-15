@@ -1,0 +1,779 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ room_name }} | ConnectPlus Room{% endblock %}
+{% block body_class %}dark-mode{% endblock %}
+
+{% block extra_head %}
+<style>
+    :root {
+        --bg-main: #0B0F17;
+        --surface-dark: #151C28;
+        --surface-border: rgba(255, 255, 255, 0.08);
+        --text-muted: #94A3B8;
+        --accent-blue: #2563EB;
+        --accent-red: #EF4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    .room-viewport {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+        background: var(--bg-main);
+        color: #F8FAFC;
+    }
+
+    /* Header Bar */
+    .room-header {
+        height: 56px;
+        background: var(--surface-dark);
+        border-bottom: 1px solid var(--surface-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        z-index: 20;
+    }
+
+    .room-title-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .room-name {
+        font-weight: 600;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .badge {
+        font-size: 0.75rem;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: var(--text-muted);
+    }
+
+    /* Main Container Layout */
+    .room-main-container {
+        display: flex;
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Grid & Screen Share Views */
+    .video-grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 12px;
+        padding: 12px;
+        align-items: center;
+        justify-content: center;
+        overflow-y: auto;
+    }
+
+    .video-grid.sharing-active {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .video-tile {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 200px;
+        background: #1E293B;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--surface-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .video-tile video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .video-tile.pip-host-overlay {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 180px;
+        height: 120px;
+        z-index: 15;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        border: 2px solid var(--accent-blue);
+        min-height: auto;
+    }
+
+    .user-badge {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(11, 15, 23, 0.8);
+        backdrop-filter: blur(6px);
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        z-index: 2;
+    }
+
+    /* Slide-over Chat Sidebar */
+    .chat-sidebar {
+        width: 320px;
+        background: var(--surface-dark);
+        border-left: 1px solid var(--surface-border);
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s ease;
+    }
+
+    .chat-sidebar.collapsed {
+        display: none;
+    }
+
+    .chat-messages {
+        flex: 1;
+        padding: 12px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .chat-msg {
+        background: #1E293B;
+        padding: 8px 12px;
+        border-radius: 8px;
+        max-width: 85%;
+        font-size: 0.8125rem;
+    }
+
+    .chat-msg.me {
+        align-self: flex-end;
+        background: var(--accent-blue);
+    }
+
+    .chat-msg .sender {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-bottom: 2px;
+    }
+
+    /* Control Dock */
+    .control-dock {
+        height: 68px;
+        background: var(--surface-dark);
+        border-top: 1px solid var(--surface-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        z-index: 20;
+    }
+
+    .control-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-control {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.7rem;
+        transition: all 0.2s;
+        position: relative;
+    }
+
+    .btn-control:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #F8FAFC;
+    }
+
+    .icon-box {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-end-meeting {
+        background: var(--accent-red);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Floating Emoji & Reactions */
+    #floatingEmojiContainer {
+        position: fixed;
+        bottom: 90px;
+        left: 20px;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 50;
+    }
+
+    .reaction-popup {
+        animation: floatUp 2s ease-out forwards;
+        font-size: 2rem;
+    }
+
+    @keyframes floatUp {
+        0% { transform: translateY(0); opacity: 1; }
+        100% { transform: translateY(-80px); opacity: 0; }
+    }
+
+    .reaction-menu {
+        display: none;
+        position: absolute;
+        bottom: 75px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1E293B;
+        border: 1px solid var(--surface-border);
+        border-radius: 24px;
+        padding: 8px 12px;
+        gap: 8px;
+        box-shadow: 0 10px 15px rgba(0,0,0,0.3);
+        z-index: 100;
+    }
+
+    .reaction-menu span {
+        cursor: pointer;
+        font-size: 1.25rem;
+        transition: transform 0.1s;
+    }
+    .reaction-menu span:hover {
+        transform: scale(1.3);
+    }
+
+    /* Modals */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+    }
+
+    .modal-card {
+        background: var(--surface-dark);
+        border: 1px solid var(--surface-border);
+        border-radius: 12px;
+        width: 90%;
+        max-width: 420px;
+        padding: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .control-dock { padding: 0 8px; }
+        .room-brand { display: none; }
+        .btn-control span { display: none; }
+        .btn-end-meeting span { display: none; }
+        .btn-end-meeting { padding: 10px; }
+        
+        .chat-sidebar {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            z-index: 30;
+        }
+
+        .video-tile.pip-host-overlay {
+            width: 120px;
+            height: 80px;
+            bottom: 12px;
+            right: 12px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="room-viewport">
+    <!-- Header Bar -->
+    <header class="room-header">
+        <div class="room-title-group">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="room-name">{{ room_name }}</span>
+            <span class="badge">ID: <strong id="display-room-id">{{ room_id }}</strong></span>
+            <span class="badge" style="color: #10B981;">
+                👥 <span id="participant-count">1</span> Joined
+            </span>
+            <span class="badge" style="color: {% if is_host %} #38BDF8{% else %}#4ADE80{% endif %};">
+                Role: {% if is_host %}Host{% else %}Guest{% endif %}
+            </span>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button onclick="downloadParticipantList()" class="badge" style="background: rgba(37, 99, 235, 0.2); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer;" title="Download Attendance List">
+                📥 List
+            </button>
+            <button onclick="openInviteModal()" style="background: var(--accent-blue); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8125rem; font-weight: 600; cursor: pointer;">
+                + Invite
+            </button>
+        </div>
+    </header>
+
+    <!-- Main View Area -->
+    <div class="room-main-container">
+        <!-- Floating Emoji Layer Container -->
+        <div id="floatingEmojiContainer"></div>
+
+        <!-- Video Grid Container -->
+        <main class="video-grid" id="video-grid">
+            <!-- Local User Video Tile -->
+            <div class="video-tile" id="tile-local">
+                <video id="local-video" autoplay muted playsinline style="transform: scaleX(-1);"></video>
+                <div class="user-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
+                    <span id="local-user-label">{{ display_name|default:user.username|default:"You" }} {% if is_host %}(Host){% else %}(Guest){% endif %}</span>
+                    <span id="handRaiseBadge" style="display: none; color: #FACC15; margin-left: 4px;">✋</span>
+                </div>
+            </div>
+
+            <!-- Screen Share Main Display Tile (Hidden by default) -->
+            <div class="video-tile" id="tile-screenshare" style="display: none; flex: 1;">
+                <video id="screen-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain;"></video>
+                <div class="user-badge">
+                    <span>🖥️ Screen Share</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Chat Sidebar -->
+        <aside class="chat-sidebar collapsed" id="chat-sidebar">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--surface-border); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 0.9375rem; font-weight: 600; margin: 0;">In-Meeting Chat</h3>
+                <button onclick="toggleChat()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-msg">
+                    <div class="sender">System</div>
+                    Connected to room {{ room_id }} as {% if is_host %}Host{% else %}Guest{% endif %}.
+                </div>
+            </div>
+
+            <form id="chat-form" onsubmit="sendChatMessage(event)" style="padding: 12px; border-top: 1px solid var(--surface-border); display: flex; gap: 8px;">
+                <input type="text" id="chat-input" placeholder="Type a message..." style="flex: 1; background: #0F172A; border: 1px solid var(--surface-border); color: white; padding: 8px 12px; border-radius: 6px; font-size: 0.8125rem;" required>
+                <button type="submit" style="background: var(--accent-blue); border: none; color: white; padding: 8px 12px; border-radius: 6px; font-weight: 600; cursor: pointer;">Send</button>
+            </form>
+        </aside>
+    </div>
+
+    <!-- Control Dock -->
+    <footer class="control-dock">
+        <div class="room-brand" style="font-size: 0.75rem; color: var(--text-muted);">
+            <span>ConnectPlus Meeting</span>
+        </div>
+
+        <div class="control-group">
+            <button class="btn-control" id="btn-audio" onclick="toggleAudio()">
+                <div class="icon-box" id="mic-icon-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                </div>
+                <span>Mute</span>
+            </button>
+
+            <button class="btn-control" id="btn-video" onclick="toggleVideo()">
+                <div class="icon-box" id="cam-icon-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                </div>
+                <span>Stop Video</span>
+            </button>
+
+            <button class="btn-control" id="btn-screen" style="color: #10B981;" onclick="toggleScreenShare()">
+                <div class="icon-box" style="background: rgba(16, 185, 129, 0.15);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <span>Share Screen</span>
+            </button>
+
+            <!-- Raise Hand Button -->
+            <button class="btn-control" id="btn-hand" onclick="toggleHandRaise()">
+                <div class="icon-box">
+                    <span style="font-size: 1.1rem;">✋</span>
+                </div>
+                <span>Raise Hand</span>
+            </button>
+
+            <!-- Emoji Reactions Trigger Button -->
+            <button class="btn-control" onclick="toggleReactionMenu()">
+                <div class="icon-box">
+                    <span style="font-size: 1.1rem;">😊</span>
+                </div>
+                <span>React</span>
+                <div class="reaction-menu" id="reactionMenu">
+                    <span onclick="sendReaction('👍')">👍</span>
+                    <span onclick="sendReaction('❤️')">❤️</span>
+                    <span onclick="sendReaction('👏')">👏</span>
+                    <span onclick="sendReaction('🔥')">🔥</span>
+                    <span onclick="sendReaction('😂')">😂</span>
+                </div>
+            </button>
+
+            <button class="btn-control" onclick="toggleChat()">
+                <div class="icon-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <span>Chat</span>
+            </button>
+        </div>
+
+        <div>
+            <a href="{% url 'dashboard' %}" class="btn-end-meeting">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                <span>End Meeting</span>
+            </a>
+        </div>
+    </footer>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal-overlay" id="invite-modal">
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 1rem;">Invite Participants</h3>
+            <button onclick="closeInviteModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
+        </div>
+        <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 12px;">Share this Room ID or full link with participants:</p>
+        
+        <div style="margin-bottom: 12px;">
+            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Room ID</label>
+            <input type="text" id="invite-room-id" readonly value="{{ room_id }}" style="width: 100%; background: #0F172A; border: 1px solid var(--surface-border); color: white; padding: 8px; border-radius: 6px; font-size: 0.875rem; font-weight: bold;">
+        </div>
+
+        <div>
+            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">Meeting Link</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="invite-url" readonly style="flex: 1; background: #0F172A; border: 1px solid var(--surface-border); color: white; padding: 8px; border-radius: 6px; font-size: 0.8125rem;">
+                <button onclick="copyInviteLink()" style="background: var(--accent-blue); border: none; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;" id="copy-btn">Copy</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ room_id|json_script:"room-id" }}
+{{ display_name|default:user.username|json_script:"current-user" }}
+<script src="{% static 'js/webrtc.js' %}"></script>
+<script>
+    const currentUser = JSON.parse(document.getElementById('current-user').textContent) || 'Participant';
+    const roomId = JSON.parse(document.getElementById('room-id').textContent);
+    const participantList = new Set([currentUser]);
+    let localStream = null;
+    let screenStream = null;
+    let isAudioMuted = false;
+    let isVideoMuted = false;
+    let isHandRaised = false;
+    let isSharingScreen = false;
+
+    // 1. Initialize local media stream for all users (Host & Guests)
+    async function initLocalMedia() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const localVideo = document.getElementById('local-video');
+            localVideo.srcObject = localStream;
+            
+            // Expose local stream globally so external WebRTC logic scripts can attach tracks
+            window.localStream = localStream;
+            if (typeof window.onLocalStreamReady === 'function') {
+                window.onLocalStreamReady(localStream);
+            }
+        } catch (error) {
+            console.error("Error accessing media devices.", error);
+            alert("Could not access your camera or microphone. Please check browser permissions and ensure no other application is blocking them.");
+        }
+    }
+    initLocalMedia();
+
+    // 2. Audio Control Toggle
+    function toggleAudio() {
+        if (!localStream) return;
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            isAudioMuted = !audioTrack.enabled;
+            const iconBox = document.getElementById('mic-icon-box');
+            const btnSpan = document.querySelector('#btn-audio span:last-child');
+            if (isAudioMuted) {
+                iconBox.style.background = 'rgba(239, 68, 68, 0.2)';
+                iconBox.style.color = '#EF4444';
+                btnSpan.textContent = 'Unmute';
+            } else {
+                iconBox.style.background = 'rgba(255, 255, 255, 0.06)';
+                iconBox.style.color = 'inherit';
+                btnSpan.textContent = 'Mute';
+            }
+        }
+    }
+
+    // 3. Video Control Toggle
+    function toggleVideo() {
+        if (!localStream) return;
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            isVideoMuted = !videoTrack.enabled;
+            const iconBox = document.getElementById('cam-icon-box');
+            const btnSpan = document.querySelector('#btn-video span:last-child');
+            if (isVideoMuted) {
+                iconBox.style.background = 'rgba(239, 68, 68, 0.2)';
+                iconBox.style.color = '#EF4444';
+                btnSpan.textContent = 'Start Video';
+            } else {
+                iconBox.style.background = 'rgba(255, 255, 255, 0.06)';
+                iconBox.style.color = 'inherit';
+                btnSpan.textContent = 'Stop Video';
+            }
+        }
+    }
+
+    // 4. Screen Sharing Toggle Handler
+    async function toggleScreenShare() {
+        const videoGrid = document.getElementById('video-grid');
+        const screenTile = document.getElementById('tile-screenshare');
+        const screenVideo = document.getElementById('screen-video');
+        const localTile = document.getElementById('tile-local');
+
+        if (!isSharingScreen) {
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                screenVideo.srcObject = screenStream;
+                screenTile.style.display = 'flex';
+                videoGrid.classList.add('sharing-active');
+                localTile.classList.add('pip-host-overlay');
+                isSharingScreen = true;
+
+                // Handle stop sharing via browser native UI stop button
+                screenStream.getVideoTracks()[0].onended = () => {
+                    stopScreenShareClean();
+                };
+
+                // Broadcast stream to peers if window method exists
+                if (typeof window.broadcastScreenStream === 'function') {
+                    window.broadcastScreenStream(screenStream);
+                }
+            } catch (err) {
+                console.error("Error sharing screen:", err);
+            }
+        } else {
+            stopScreenShareClean();
+        }
+    }
+
+    function stopScreenShareClean() {
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+        const videoGrid = document.getElementById('video-grid');
+        const screenTile = document.getElementById('tile-screenshare');
+        const localTile = document.getElementById('tile-local');
+
+        screenTile.style.display = 'none';
+        videoGrid.classList.remove('sharing-active');
+        localTile.classList.remove('pip-host-overlay');
+        isSharingScreen = false;
+
+        if (typeof window.stopScreenBroadcast === 'function') {
+            window.stopScreenBroadcast();
+        }
+    }
+
+    // 5. Hand Raise Functionality & Signal Sync
+    function toggleHandRaise() {
+        isHandRaised = !isHandRaised;
+        const handBadge = document.getElementById('handRaiseBadge');
+        const handBtn = document.getElementById('btn-hand');
+        
+        handBadge.style.display = isHandRaised ? 'inline' : 'none';
+        handBtn.style.color = isHandRaised ? '#FACC15' : 'var(--text-muted)';
+        
+        const messageText = isHandRaised ? `${currentUser} raised their hand. ✋` : `${currentUser} lowered their hand.`;
+        appendSystemChatMessage(messageText);
+
+        // Broadcast event over WebSocket/WebRTC data channel if available
+        if (typeof window.sendSignalingData === 'function') {
+            window.sendSignalingData({ type: 'hand-raise', user: currentUser, raised: isHandRaised });
+        }
+    }
+
+    // 6. Emoji Reactions Menu & Display
+    function toggleReactionMenu() {
+        const menu = document.getElementById('reactionMenu');
+        menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function sendReaction(emoji) {
+        toggleReactionMenu();
+        triggerFloatingEmoji(emoji);
+
+        if (typeof window.sendSignalingData === 'function') {
+            window.sendSignalingData({ type: 'reaction', emoji: emoji, user: currentUser });
+        }
+    }
+
+    function triggerFloatingEmoji(emoji) {
+        const container = document.getElementById('floatingEmojiContainer');
+        const span = document.createElement('span');
+        span.className = 'reaction-popup';
+        span.textContent = emoji;
+        container.appendChild(span);
+        setTimeout(() => span.remove(), 2000);
+    }
+
+    // 7. Participant Roster & Count Handler
+    function updateParticipantUI() {
+        document.getElementById('participant-count').textContent = participantList.size;
+    }
+
+    function addParticipantToRoster(username) {
+        if (username && !participantList.has(username)) {
+            participantList.add(username);
+            updateParticipantUI();
+            appendSystemChatMessage(`${username} joined the room.`);
+        }
+    }
+
+    function removeParticipantFromRoster(username) {
+        if (username && participantList.has(username)) {
+            participantList.delete(username);
+            updateParticipantUI();
+            appendSystemChatMessage(`${username} left the room.`);
+        }
+    }
+
+    function downloadParticipantList() {
+        const rows = [["Username", "Joined Time"]];
+        const now = new Date().toLocaleTimeString();
+        participantList.forEach(user => rows.push([user, now]));
+
+        let csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Meeting_Participants_${roomId}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // 8. Chat Functionality
+    function toggleChat() {
+        document.getElementById('chat-sidebar').classList.toggle('collapsed');
+    }
+
+    function sendChatMessage(e) {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const messages = document.getElementById('chat-messages');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-msg me';
+        msgDiv.innerHTML = `<div class="sender">You</div>${escapeHtml(text)}`;
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+        input.value = '';
+
+        if (typeof window.sendSignalingData === 'function') {
+            window.sendSignalingData({ type: 'chat', message: text, user: currentUser });
+        }
+    }
+
+    function appendPeerChatMessage(senderName, text) {
+        const messages = document.getElementById('chat-messages');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-msg';
+        msgDiv.innerHTML = `<div class="sender">${escapeHtml(senderName)}</div>${escapeHtml(text)}`;
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function appendSystemChatMessage(text) {
+        const messages = document.getElementById('chat-messages');
+        const msgDiv = document.createElement('div');
+        msgDiv.style.color = 'var(--text-muted)';
+        msgDiv.style.fontStyle = 'italic';
+        msgDiv.style.fontSize = '0.75rem';
+        msgDiv.textContent = text;
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    // Modal Manager
+    function openInviteModal() {
+        document.getElementById('invite-url').value = window.location.href;
+        document.getElementById('invite-modal').style.display = 'flex';
+    }
+
+    function closeInviteModal() {
+        document.getElementById('invite-modal').style.display = 'none';
+    }
+
+    function copyInviteLink() {
+        const input = document.getElementById('invite-url');
+        input.select();
+        navigator.clipboard.writeText(input.value);
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+    }
+
+    function escapeHtml(string) {
+        return string.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    window.addEventListener('click', function(e) {
+        const menu = document.getElementById('reactionMenu');
+        if (menu && !e.target.closest('#reactionMenu') && !e.target.closest('[onclick="toggleReactionMenu()"]')) {
+            menu.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

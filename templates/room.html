@@ -13,6 +13,7 @@
         --text-muted: #94A3B8;
         --accent-blue: #2563EB;
         --accent-red: #EF4444;
+        --accent-emerald: #10B981;
     }
 
     * { box-sizing: border-box; }
@@ -71,7 +72,7 @@
         overflow: hidden;
     }
 
-    /* Grid & Screen Share Views */
+    /* Pinned Layout: Host/Screen Share primary, others in grid/overlay */
     .video-grid {
         flex: 1;
         display: grid;
@@ -100,6 +101,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
+    }
+
+    .video-tile.host-pinned {
+        border: 2px solid var(--accent-blue);
+        box-shadow: 0 4px 20px rgba(37, 99, 235, 0.2);
     }
 
     .video-tile video {
@@ -212,9 +218,14 @@
         position: relative;
     }
 
-    .btn-control:hover {
+    .btn-control:hover:not(:disabled) {
         background: rgba(255, 255, 255, 0.05);
         color: #F8FAFC;
+    }
+
+    .btn-control:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
     }
 
     .icon-box {
@@ -306,12 +317,13 @@
         padding: 20px;
     }
 
+    /* Mobile Adaptability (Portrait & Landscape Support) */
     @media (max-width: 768px) {
-        .control-dock { padding: 0 8px; }
+        .control-dock { padding: 0 8px; height: auto; flex-wrap: wrap; justify-content: center; padding-bottom: 8px;}
         .room-brand { display: none; }
         .btn-control span { display: none; }
         .btn-end-meeting span { display: none; }
-        .btn-end-meeting { padding: 10px; }
+        .btn-end-meeting { padding: 8px 12px; }
         
         .chat-sidebar {
             position: absolute;
@@ -321,8 +333,8 @@
         }
 
         .video-tile.pip-host-overlay {
-            width: 120px;
-            height: 80px;
+            width: 110px;
+            height: 75px;
             bottom: 12px;
             right: 12px;
         }
@@ -341,18 +353,20 @@
             <span class="badge" style="color: #10B981;">
                 👥 <span id="participant-count">1</span> Joined
             </span>
-            <span class="badge" style="color: {% if is_host %} #38BDF8{% else %}#4ADE80{% endif %};">
+            <span class="badge" style="color: {% if is_host %}#38BDF8{% else %}#4ADE80{% endif %};">
                 Role: {% if is_host %}Host{% else %}Guest{% endif %}
             </span>
         </div>
 
         <div style="display: flex; gap: 8px;">
             <button onclick="downloadParticipantList()" class="badge" style="background: rgba(37, 99, 235, 0.2); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer;" title="Download Attendance List">
-                📥 List
+                📥 Attendance
             </button>
+            {% if is_host %}
             <button onclick="openInviteModal()" style="background: var(--accent-blue); border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8125rem; font-weight: 600; cursor: pointer;">
                 + Invite
             </button>
+            {% endif %}
         </div>
     </header>
 
@@ -361,23 +375,23 @@
         <!-- Floating Emoji Layer Container -->
         <div id="floatingEmojiContainer"></div>
 
-        <!-- Video Grid Container -->
+        <!-- Video Grid Container (Host pinned / Screen Share view prioritized) -->
         <main class="video-grid" id="video-grid">
-            <!-- Local User Video Tile -->
-            <div class="video-tile" id="tile-local">
+            <!-- Local User Video Tile (Pinned if Host) -->
+            <div class="video-tile {% if is_host %}host-pinned{% endif %}" id="tile-local">
                 <video id="local-video" autoplay muted playsinline style="transform: scaleX(-1);"></video>
                 <div class="user-badge">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>
-                    <span id="local-user-label">{{ display_name|default:user.username|default:"You" }} {% if is_host %}(Host){% else %}(Guest){% endif %}</span>
+                    <span id="local-user-label">{{ display_name|default:user.username|default:"You" }} {% if is_host %}(Host - Pinned){% else %}(Guest){% endif %}</span>
                     <span id="handRaiseBadge" style="display: none; color: #FACC15; margin-left: 4px;">✋</span>
                 </div>
             </div>
 
-            <!-- Screen Share Main Display Tile (Hidden by default) -->
-            <div class="video-tile" id="tile-screenshare" style="display: none; flex: 1;">
+            <!-- Screen Share Main Display Tile (Host/Enabled only) -->
+            <div class="video-tile host-pinned" id="tile-screenshare" style="display: none; flex: 1;">
                 <video id="screen-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain;"></video>
                 <div class="user-badge">
-                    <span>🖥️ Screen Share</span>
+                    <span>🖥️ Host Screen Share</span>
                 </div>
             </div>
         </main>
@@ -410,21 +424,24 @@
         </div>
 
         <div class="control-group">
-            <button class="btn-control" id="btn-audio" onclick="toggleAudio()">
-                <div class="icon-box" id="mic-icon-box">
+            <!-- Audio Toggle (Locked for guests until allowed by host) -->
+            <button class="btn-control" id="btn-audio" onclick="toggleAudio()" {% if not is_host %}disabled title="Waiting for Host permission to unmute"{% endif %}>
+                <div class="icon-box" id="mic-icon-box" style="{% if not is_host %}background: rgba(239, 68, 68, 0.15); color: #EF4444;{% endif %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
                 </div>
-                <span>Mute</span>
+                <span>{% if is_host %}Mute{% else %}Mic Locked{% endif %}</span>
             </button>
 
-            <button class="btn-control" id="btn-video" onclick="toggleVideo()">
-                <div class="icon-box" id="cam-icon-box">
+            <!-- Video Toggle (Locked for guests until allowed by host) -->
+            <button class="btn-control" id="btn-video" onclick="toggleVideo()" {% if not is_host %}disabled title="Waiting for Host permission to start video"{% endif %}>
+                <div class="icon-box" id="cam-icon-box" style="{% if not is_host %}background: rgba(239, 68, 68, 0.15); color: #EF4444;{% endif %}">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                 </div>
-                <span>Stop Video</span>
+                <span>{% if is_host %}Stop Video{% else %}Cam Locked{% endif %}</span>
             </button>
 
-            <button class="btn-control" id="btn-screen" style="color: #10B981;" onclick="toggleScreenShare()">
+            <!-- Screen Share (Host only or explicitly permitted) -->
+            <button class="btn-control" id="btn-screen" style="color: #10B981;" onclick="toggleScreenShare()" {% if not is_host %}disabled title="Only hosts can share screen"{% endif %}>
                 <div class="icon-box" style="background: rgba(16, 185, 129, 0.15);">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                 </div>
@@ -471,7 +488,8 @@
     </footer>
 </div>
 
-<!-- Invite Modal -->
+{% if is_host %}
+<!-- Invite Modal (Host Only) -->
 <div class="modal-overlay" id="invite-modal">
     <div class="modal-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -494,41 +512,76 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 {{ room_id|json_script:"room-id" }}
 {{ display_name|default:user.username|json_script:"current-user" }}
+{{ is_host|json_script:"is-host-flag" }}
 <script src="{% static 'js/webrtc.js' %}"></script>
 <script>
     const currentUser = JSON.parse(document.getElementById('current-user').textContent) || 'Participant';
     const roomId = JSON.parse(document.getElementById('room-id').textContent);
+    const isHost = JSON.parse(document.getElementById('is-host-flag').textContent);
     const participantList = new Set([currentUser]);
     let localStream = null;
     let screenStream = null;
-    let isAudioMuted = false;
-    let isVideoMuted = false;
+    let isAudioMuted = !isHost; // Guests muted by default
+    let isVideoMuted = !isHost; // Guests video off by default
     let isHandRaised = false;
     let isSharingScreen = false;
 
-    // 1. Initialize local media stream for all users (Host & Guests)
+    // 1. Initialize local media stream (Respecting Host permissions)
     async function initLocalMedia() {
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            // Guests initialize with tracks disabled until host allows
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: isHost, 
+                audio: isHost 
+            });
             const localVideo = document.getElementById('local-video');
             localVideo.srcObject = localStream;
             
-            // Expose local stream globally so external WebRTC logic scripts can attach tracks
             window.localStream = localStream;
             if (typeof window.onLocalStreamReady === 'function') {
                 window.onLocalStreamReady(localStream);
             }
         } catch (error) {
             console.error("Error accessing media devices.", error);
-            alert("Could not access your camera or microphone. Please check browser permissions and ensure no other application is blocking them.");
+            if (isHost) {
+                alert("Could not access your camera or microphone. Please check browser permissions.");
+            }
         }
     }
     initLocalMedia();
+
+    // Host permission hook for unlocking guest audio/video dynamically via signaling/WebRTC data channel
+    window.grantHostPermissions = function() {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            localStream = stream;
+            document.getElementById('local-video').srcObject = localStream;
+            
+            const btnAudio = document.getElementById('btn-audio');
+            const btnVideo = document.getElementById('btn-video');
+            const btnScreen = document.getElementById('btn-screen');
+
+            btnAudio.removeAttribute('disabled');
+            btnAudio.title = "";
+            document.querySelector('#btn-audio span:last-child').textContent = 'Mute';
+
+            btnVideo.removeAttribute('disabled');
+            btnVideo.title = "";
+            document.querySelector('#btn-video span:last-child').textContent = 'Stop Video';
+
+            if (isHost) {
+                btnScreen.removeAttribute('disabled');
+                btnScreen.title = "";
+            }
+
+            appendSystemChatMessage("Host has enabled your microphone and camera privileges.");
+        }).catch(err => console.error("Failed to acquire stream on permission grant", err));
+    };
 
     // 2. Audio Control Toggle
     function toggleAudio() {
@@ -572,8 +625,9 @@
         }
     }
 
-    // 4. Screen Sharing Toggle Handler
+    // 4. Screen Sharing Toggle Handler (Host Only)
     async function toggleScreenShare() {
+        if (!isHost) return;
         const videoGrid = document.getElementById('video-grid');
         const screenTile = document.getElementById('tile-screenshare');
         const screenVideo = document.getElementById('screen-video');
@@ -588,12 +642,10 @@
                 localTile.classList.add('pip-host-overlay');
                 isSharingScreen = true;
 
-                // Handle stop sharing via browser native UI stop button
                 screenStream.getVideoTracks()[0].onended = () => {
                     stopScreenShareClean();
                 };
 
-                // Broadcast stream to peers if window method exists
                 if (typeof window.broadcastScreenStream === 'function') {
                     window.broadcastScreenStream(screenStream);
                 }
@@ -624,7 +676,7 @@
         }
     }
 
-    // 5. Hand Raise Functionality & Signal Sync
+    // 5. Hand Raise Functionality
     function toggleHandRaise() {
         isHandRaised = !isHandRaised;
         const handBadge = document.getElementById('handRaiseBadge');
@@ -636,7 +688,6 @@
         const messageText = isHandRaised ? `${currentUser} raised their hand. ✋` : `${currentUser} lowered their hand.`;
         appendSystemChatMessage(messageText);
 
-        // Broadcast event over WebSocket/WebRTC data channel if available
         if (typeof window.sendSignalingData === 'function') {
             window.sendSignalingData({ type: 'hand-raise', user: currentUser, raised: isHandRaised });
         }
@@ -666,7 +717,7 @@
         setTimeout(() => span.remove(), 2000);
     }
 
-    // 7. Participant Roster & Count Handler
+    // 7. Participant Roster & Attendance Export
     function updateParticipantUI() {
         document.getElementById('participant-count').textContent = participantList.size;
     }
@@ -746,23 +797,29 @@
         messages.scrollTop = messages.scrollHeight;
     }
 
-    // Modal Manager
+    // Modal Manager (Host Only)
     function openInviteModal() {
-        document.getElementById('invite-url').value = window.location.href;
-        document.getElementById('invite-modal').style.display = 'flex';
+        const urlInput = document.getElementById('invite-url');
+        if (urlInput) {
+            urlInput.value = window.location.href;
+            document.getElementById('invite-modal').style.display = 'flex';
+        }
     }
 
     function closeInviteModal() {
-        document.getElementById('invite-modal').style.display = 'none';
+        const modal = document.getElementById('invite-modal');
+        if (modal) modal.style.display = 'none';
     }
 
     function copyInviteLink() {
         const input = document.getElementById('invite-url');
-        input.select();
-        navigator.clipboard.writeText(input.value);
-        const btn = document.getElementById('copy-btn');
-        btn.textContent = 'Copied!';
-        setTimeout(() => btn.textContent = 'Copy', 2000);
+        if (input) {
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            const btn = document.getElementById('copy-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        }
     }
 
     function escapeHtml(string) {
